@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\simon\Documents\HKU\Jaar 2\Kernmodule4\Kmod4Repo\glfw-3.3.7\build\CMakeFiles\6383f63b7d94b14255d3cd83433d6d90\INSTALL_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{76A76D04-D842-3D48-A967-C374D4979514}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

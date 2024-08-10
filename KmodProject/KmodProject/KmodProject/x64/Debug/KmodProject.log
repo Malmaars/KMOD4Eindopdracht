@@ -1,0 +1,8 @@
+﻿  main.cpp
+C:\Users\simon\Documents\HKU\Jaar 2\Kernmodule4\Kernmodule4\Kmod4Repo\KmodProject\KmodProject\KmodProject\main.cpp(138,22): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\simon\Documents\HKU\Jaar 2\Kernmodule4\Kernmodule4\Kmod4Repo\KmodProject\KmodProject\KmodProject\main.cpp(147,26): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\simon\Documents\HKU\Jaar 2\Kernmodule4\Kernmodule4\Kmod4Repo\KmodProject\KmodProject\KmodProject\main.cpp(228,10): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\simon\Documents\HKU\Jaar 2\Kernmodule4\Kernmodule4\Kmod4Repo\KmodProject\KmodProject\KmodProject\main.cpp(650,14): warning C4244: 'initializing': conversion from 'std::streamoff' to 'int', possible loss of data
+  KmodProject.vcxproj -> C:\Users\simon\Documents\HKU\Jaar 2\Kernmodule4\Kernmodule4\Kmod4Repo\KmodProject\KmodProject\x64\Debug\KmodProject.exe
+  'pwsh.exe' is not recognized as an internal or external command,
+  operable program or batch file.

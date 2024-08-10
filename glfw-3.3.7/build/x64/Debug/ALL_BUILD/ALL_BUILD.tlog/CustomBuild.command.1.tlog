@@ -1,0 +1,10 @@
+^C:\USERS\SIMON\DOCUMENTS\HKU\JAAR 2\KERNMODULE4\KMOD4REPO\GLFW-3.3.7\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SC:/Users/simon/Documents/HKU/Jaar 2/Kernmodule4/Kmod4Repo/glfw-3.3.7" "-BC:/Users/simon/Documents/HKU/Jaar 2/Kernmodule4/Kmod4Repo/glfw-3.3.7/build" --check-stamp-file "C:/Users/simon/Documents/HKU/Jaar 2/Kernmodule4/Kmod4Repo/glfw-3.3.7/build/CMakeFiles/generate.stamp"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

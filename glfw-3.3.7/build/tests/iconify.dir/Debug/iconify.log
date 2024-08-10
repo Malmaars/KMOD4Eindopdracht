@@ -1,0 +1,6 @@
+﻿  Building Custom Rule C:/Users/simon/Documents/HKU/Jaar 2/Kernmodule4/Kmod4Repo/glfw-3.3.7/tests/CMakeLists.txt
+  iconify.c
+  getopt.c
+  glad_gl.c
+  Generating Code...
+  iconify.vcxproj -> C:\Users\simon\Documents\HKU\Jaar 2\Kernmodule4\Kmod4Repo\glfw-3.3.7\build\tests\Debug\iconify.exe
