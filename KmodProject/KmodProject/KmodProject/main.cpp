@@ -12,6 +12,7 @@
 #include <vector>
 #include <string>
 #include <cmath>
+#include <algorithm> 
 #include <random>
 
 #include "model.h"
@@ -19,21 +20,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-
-
-
-struct Light {
-	glm::vec3 position;
-	glm::vec3 color;
-
-	Light(const glm::vec3& pos, const glm::vec3& col) : position(pos), color(col) {}
-};
-
 //Build -> rebuild Solution, Debug -> Start without debugging
 
-//Waarom doen we de functies met kleine letters? Is dat iets wat moet met opengl
+//Waarom doen we de functies met kleine letters? Is dat iets wat moet met opengl?
 //Of is dat een regel bij opengl programmers?
-//En waarom moeten we überhaupt de functies declareren voordat we ze ook echt aanmaken?
 
 //Forward Declaration
 int init(GLFWwindow*& window);
@@ -42,17 +32,14 @@ void createShaders();
 void createProgram(GLuint& programID, const char* vertex, const char* fragment);
 void createTGeometry(GLuint& vao, int& size, int& numIndices);
 GLuint loadTexture(const char* path, int comp = 0);
-void renderBox(glm::vec3 pos, glm::vec3 rot, glm::vec3 scale);
 void renderSkyBox();
 void renderTerrain();
-void renderModel(Model* model, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale);
-unsigned int GeneratePlane(const char* heightmap, unsigned char*& data, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID);
-float RandomFloat(float min, float max);
 unsigned int GenerateRandomPlane(int width, int height, float hScale, float xzScale, unsigned int& indexCount);
 void movePlane();
+void initiateShockwave(float dampingMin, float dampingMax, float offsetMin, float offsetMax);
+void shockwave();
 
 //Window callbacks
-void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
 bool keys[1024];
@@ -61,16 +48,15 @@ bool keys[1024];
 void loadFile(const char* filename, char*& output);
 
 //Program IDs
-GLuint simpleProgram, skyProgram, terrainProgram, modelProgram;
+GLuint skyProgram, terrainProgram;
 
-const int WIDTH = 1280, HEIGHT = 720;
+const int WIDTH = 1920, HEIGHT = 1080;
 
 //World data
 
 glm::vec3 lightDirection = glm::normalize(glm::vec3(0, -0.05f, -1));
 glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 0.0f);
 
-GLuint boxTex, boxNormal;
 GLuint boxVAO, boxEBO;
 int boxSize;
 int boxIndexCount;
@@ -89,15 +75,22 @@ unsigned char* heightmapTexture;
 
 glm::vec3 groundColor = glm::vec3(51.0f / 255.0f, 31.0f / 255.0f, 64.0f / 255.0f);
 glm::vec3 lineColor = glm::vec3(193.0f / 255.0f, 63.0f / 255.0f, 153.0f / 255.0f);
-int terrainWidth = 256;
-int terrainHeight = 256;
+int terrainWidth = 512;
+int terrainHeight = 512;
 float* vertices;
+float* actualVertices;
 float* bufferVertices; // this is so I can rearrange the vertices without losing the values of where they were before
 
-float terrainHScale, terrainXZScale; //public variables so I can use them to render the plan on the correct location
+float terrainHScale, terrainXZScale; //public variables so I can use them to render the plane on the correct location
 
 float scrollTimer = 0; //timer so the scrolling of the terrain isn't insanely fast;
 
+//shockwave values
+float* shockWaveVertices;
+float* shockWaveVerticesBuffer;
+float shockWaveTimer = 0;
+float* heightWaveVertices;
+float* heightWaveVerticesBuffer;
 
 GLuint synth;
 
@@ -110,22 +103,12 @@ int main() {
 		return res;
 	}
 
-	//stbi_set_flip_vertically_on_load(true);
-
-
 	createShaders();
 	createTGeometry(boxVAO, boxSize, boxIndexCount);
 
-	terrainHScale = 100.0f;
+	terrainHScale = 1.0f;
 	terrainXZScale = 5.0f;
 	terrainVAO = GenerateRandomPlane(terrainWidth, terrainHeight, terrainHScale, terrainXZScale, terrainIndexCount);
-	heightNormalID = loadTexture("textures/emptyNormal.png");
-
-	boxTex = loadTexture("textures/waterColor.png");
-	boxNormal = loadTexture("textures/emptyNormal.png");
-
-	synth = loadTexture("textures/synth.jpg");
-
 	// Enable depth testing
 	glEnable(GL_DEPTH_TEST);
 
@@ -142,6 +125,7 @@ int main() {
 	projection = glm::perspective(glm::radians(45.0f), WIDTH / (float)HEIGHT, 0.1f, 5000.0f);
 
 
+
 	float lastFrameTime = glfwGetTime();
 
 	//Render Loop
@@ -153,6 +137,7 @@ int main() {
 		float deltaTime = currentFrameTime - lastFrameTime;
 		lastFrameTime = currentFrameTime;
 		scrollTimer += deltaTime;
+		shockWaveTimer += deltaTime;
 
 		//events pollen
 		glfwPollEvents();
@@ -162,13 +147,19 @@ int main() {
 		//glClearColor(0.1f, 0.8f, 0.76f, 0); 
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glUseProgram(simpleProgram);
-
 		renderSkyBox();
 
-		if (scrollTimer > 0.03f) {
+
+		//if (shockWaveTimer > 3) {
+		//	initiateShockwave(); 
+		//	shockWaveTimer = 0;
+		//}
+
+		if (scrollTimer > 0.035f) {
 			movePlane();
 			scrollTimer = 0;
+
+			shockwave();
 		}
 		renderTerrain();
 
@@ -182,37 +173,6 @@ int main() {
 
 	glfwTerminate();
 	return 0;
-}
-
-void renderBox(glm::vec3 pos, glm::vec3 rot, glm::vec3 scale) {
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::translate(world, pos);
-	world = world * glm::toMat4(glm::quat(rot));
-	world = glm::scale(world, scale);
-
-	glUseProgram(simpleProgram);
-
-	glUniformMatrix4fv(glGetUniformLocation(simpleProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
-	glUniformMatrix4fv(glGetUniformLocation(simpleProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(simpleProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
-	glUniform3fv(glGetUniformLocation(simpleProgram, "lightDirection"), 1, glm::value_ptr(lightDirection));
-	glUniform3fv(glGetUniformLocation(simpleProgram, "cameraPosition"), 1, glm::value_ptr(cameraPosition));
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, boxTex);
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, boxNormal);
-
-	glBindVertexArray(boxVAO);
-	//glDrawArrays(GL_TRIANGLES, 0, triangleSize);
-	glDrawElements(GL_TRIANGLES, boxIndexCount, GL_UNSIGNED_INT, 0);
-
-	glDisable(GL_BLEND);
 }
 
 void renderSkyBox() {
@@ -253,11 +213,15 @@ void renderTerrain() {
 	//Render de environment twee keer. Eerst een solid color, daarna de wireframe
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+
 	glUseProgram(terrainProgram);
 
 	//Matrices!
 	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::translate(world, glm::vec3(-((terrainWidth * terrainXZScale) / 2), -15, 0));
+	world = glm::translate(world, glm::vec3(-((terrainWidth * terrainXZScale) / 2), -5, -100));
 
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
 	glUniformMatrix4fv(glGetUniformLocation(terrainProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
@@ -272,6 +236,9 @@ void renderTerrain() {
 	glBindVertexArray(terrainVAO);
 	glDrawElements(GL_TRIANGLES, terrainIndexCount, GL_UNSIGNED_INT, 0);
 
+
+	//doing just glLineWidth(5.0f); makes every pixel the same thickness, I want to change the thickness with its distance from the camera
+	glLineWidth(1.0f); // Set the line width to 2 pixels
 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 	//set the color to purple for the fill
@@ -289,18 +256,25 @@ void renderTerrain() {
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 }
 
-// Function to generate a random float between a given range
-float RandomFloat(float min, float max) {
-	static std::default_random_engine e;
-	static std::uniform_real_distribution<> dis(0, 1); // range [0, 1)
-	return min + dis(e) * (max - min);
-}
-
 unsigned int GenerateRandomPlane(int width,int height, float hScale, float xzScale, unsigned int& indexCount) {
 
 	int stride = 8; // position (3) + normal (3) + uv (2)
 	vertices = new float[(width * height) * stride];
 	unsigned int* indices = new unsigned int[(width - 1) * (height - 1) * 6];
+	
+	//save this info for the shockwave
+	//this may look weird, but the shockwave flows per row, so we only need to save the height really
+	shockWaveVertices = new float[terrainHeight];
+	shockWaveVerticesBuffer = new float[terrainHeight];
+	heightWaveVertices = new float[terrainHeight];
+	heightWaveVerticesBuffer = new float[terrainHeight];
+
+	for (int i = 0; i < terrainHeight; i++) {
+		shockWaveVertices[i] = 0;
+		shockWaveVerticesBuffer[i] = 0;
+		heightWaveVertices[i] = 0;
+		heightWaveVerticesBuffer[i] = 0;
+	}
 
 	int index = 0;
 	float* randomHeights = new float[width * height];
@@ -308,22 +282,62 @@ unsigned int GenerateRandomPlane(int width,int height, float hScale, float xzSca
 	//power of 2 to make sure the grid alligns
 	int interval = 2;
 
-
-	// take in account the previous random height, so the difference won't be that big
+	// maybe take in account the previous random height, so the difference won't be that big
 	// Initialize the random heights for every 20th vertex
 	for (int z = 0; z < height; z += interval) {
 		for (int x = 0; x < width; x += interval) {
-			randomHeights[z * width + x] = ((rand() % 100) / 1000.0f) * hScale;
+
+			int vertexPosition = index;
+
+			//say the plane is 256 wide, the center is at vertex 128. If the width is one, I will make 127, 128, and 129 flat. So 1 to each side
+			int centerVertex = width / 2;
+			int row = (int)(vertexPosition / width);
+			float distanceFromCenter = std::pow(std::pow((vertexPosition - (width * row) - centerVertex), 2), 0.5f);
+
+			int heightValue = (int)(distanceFromCenter / 8);
+			//std::cout << heightValue << std::endl;
+
+			//randomHeights[z * width + x] = (rand() / (1000.0f * (heightValue + 1))) * hScale;
+
+			//I want a maximum value of 8
+			if (heightValue > 10)
+				heightValue = 10;
+			if (heightValue <= 0)
+				heightValue = 1;
+
+			if (distanceFromCenter > 100)
+				distanceFromCenter = 100;
+
+			randomHeights[z * width + x] = std::pow(distanceFromCenter, (rand() % heightValue) * 0.05f) * hScale;
+
+			index++;
 		}
 	}
+
+	index = 0;
 
 	// Interpolate the heights between the random vertices
 	for (int z = 0; z < height; ++z) {
 		for (int x = 0; x < width; ++x) {
-			if ((x % interval == 0) && (z % interval == 0)) {
-				// Keep the random height
+			
+
+			//I want the middle couple rows to be flat.
+			//(int) float round down. I can use this info
+			bool flat = false;
+			int vertexPosition = (int)(index / stride);
+			int roadWidth = 3; //the width of the road in the center.
+
+			//say the plane is 256 wide, the center is at vertex 128. If the width is one, I will make 127, 128, and 129 flat. So 1 to each side
+			int centerVertex = width / 2;
+			int row = (int)(vertexPosition / width);
+			float distanceFromCenter = std::pow(std::pow((vertexPosition - (width * row) - centerVertex), 2), 0.5f);
+
+			if (distanceFromCenter < roadWidth)
+			{
+				flat = true;
 			}
-			else {
+
+			 if ((x % interval != 0) || (z % interval != 0)) {
 				// Interpolate between the nearest random vertices
 				int x0 = (x / interval) * interval;
 				int z0 = (z / interval) * interval;
@@ -339,9 +353,14 @@ unsigned int GenerateRandomPlane(int width,int height, float hScale, float xzSca
 				randomHeights[z * width + x] = h0 * (1 - sz) + h1 * sz;
 			}
 
+
 			// Set position
 			vertices[index++] = x * xzScale;
-			vertices[index++] = randomHeights[z * width + x];
+			if(flat)
+				vertices[index++] = 0;
+			else
+				vertices[index++] = randomHeights[z * width + x];
+
 			vertices[index++] = z * xzScale;
 
 			// Set normal (placeholder for now)
@@ -368,6 +387,12 @@ unsigned int GenerateRandomPlane(int width,int height, float hScale, float xzSca
 			indices[index++] = vertex + width + 1;
 			indices[index++] = vertex + 1;
 		}
+	}
+
+	actualVertices = new float[width * height * stride];
+	bufferVertices = new float[width * height * stride];
+	for (int i = 0; i < width * height * stride; i++) {
+		actualVertices[i] = vertices[i];
 	}
 
 	unsigned int vertSize = (width * height) * stride * sizeof(float);
@@ -401,112 +426,88 @@ unsigned int GenerateRandomPlane(int width,int height, float hScale, float xzSca
 	return VAO;
 }
 
-unsigned int GeneratePlane(const char* heightmap, unsigned char*& data, GLenum format, int comp, float hScale, float xzScale, unsigned int& indexCount, unsigned int& heightmapID) {
-	int width, height, channels;
-	data = nullptr;
-	if (heightmap != nullptr) {
-		data = stbi_load(heightmap, &width, &height, &channels, comp);
-		if (data) {
-			glGenTextures(1, &heightmapID);
-			glBindTexture(GL_TEXTURE_2D, heightmapID);
-
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-
-			glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-			glGenerateMipmap(GL_TEXTURE_2D);
-			glBindTexture(GL_TEXTURE_2D, 0);
-		}
-	}
-	int stride = 8;
-	float* vertices = new float[(width * height) * stride];
-	unsigned int* indices = new unsigned int[(width - 1) * (height - 1) * 6];
-
-	int index = 0;
-	for (int i = 0; i < (width * height); i++) {
-		// TODO: calculate x/z values
-		int x = i % width;
-		int z = i / width;
-
-		float texHeight = (float)data[i * comp];
-
-		// TODO: set position
-		vertices[index++] = x * xzScale;
-		vertices[index++] = (texHeight / 255.0f) * hScale;
-		vertices[index++] = z * xzScale;
-
-		// TODO: set normal
-		vertices[index++] = 0;
-		vertices[index++] = 1;
-		vertices[index++] = 2;
-
-		// TODO: set uv
-		vertices[index++] = x / (float)width;
-		vertices[index++] = z / (float)height;
-	}
-
-	// OPTIONAL TODO: Calculate normal
-	// TODO: Set normal
-
-	index = 0;
-	for (int i = 0; i < (width - 1) * (height - 1); i++) {
-
-		int x = i % (width - 1);
-		int z = i / (width - 1);
-
-		int vertex = z * width + x;
-
-		indices[index++] = vertex;
-		indices[index++] = vertex + width;
-		indices[index++] = vertex + width + 1;
-
-		indices[index++] = vertex;
-		indices[index++] = vertex + width + 1;
-		indices[index++] = vertex + 1;
-
-	}
-
-	unsigned int vertSize = (width * height) * stride * sizeof(float);
-	indexCount = ((width - 1) * (height - 1) * 6);
-
-	unsigned int VAO, VBO, EBO;
-	glGenVertexArrays(1, &VAO);
-	glGenBuffers(1, &VBO);
-	glGenBuffers(1, &EBO);
-
-	glBindVertexArray(VAO);
-
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, vertSize, vertices, GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexCount * sizeof(unsigned int), indices, GL_STATIC_DRAW);
-
-	// vertex information!
-	// position
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * stride, 0);
-	glEnableVertexAttribArray(0);
-	// normal
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * stride, (void*)(sizeof(float) * 3));
-	glEnableVertexAttribArray(1);
-	// uv
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(float) * stride, (void*)(sizeof(float) * 6));
-	glEnableVertexAttribArray(2);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-	glBindVertexArray(0);
-
-	delete[] vertices;
-	delete[] indices;
-
-	//stbi_image_free(data);
-
-	return VAO;
-}
-
 void movePlane() {
 
-	bufferVertices = vertices;
+	int stride = 8; // position (3) + normal (3) + uv (2)
+	int totalVertices = terrainWidth * terrainHeight;
+	int vertexArraySize = totalVertices * stride;
+
+	// Assuming `vertices` is allocated somewhere globally or passed in with the correct size
+	int index = 0;
+
+	int interval = 1;
+
+
+	for (int i = 0; i < terrainHeight * terrainWidth * stride; i++) {
+		bufferVertices[i] = actualVertices[i];
+	}
+
+	//change the position of the vertex to the one below it (visually), so i + width
+	for (int z = 0; z < terrainHeight; ++z) {
+		for (int x = 0; x < terrainWidth; ++x) {
+
+			index++;
+			if (index + (terrainWidth * stride) < vertexArraySize) {
+				//ONLY the y position, I changed the x and z as well and that just results in every vertex moving to the exact same spot as the target
+				vertices[index] = bufferVertices[index + terrainWidth * stride];
+				actualVertices[index] = bufferVertices[index + terrainWidth * stride];
+			}
+
+			else {
+				vertices[index] = bufferVertices[index + terrainWidth * stride - vertexArraySize];
+				actualVertices[index] = bufferVertices[index + terrainWidth * stride - vertexArraySize];
+			}
+			
+			index += stride - 1;
+		}
+	}
+
+	// Correctly update the vertex buffer
+	glBindBuffer(GL_ARRAY_BUFFER, terrainVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, vertexArraySize * sizeof(float), vertices);  // Correctly calculating size
+}
+
+void initiateShockwave(float dampingMin, float dampingMax, float offsetMin, float offsetMax) {
+
+	if (dampingMin != 0 || dampingMax != 0) {
+		shockWaveVertices[7] = dampingMax;
+		for (int i = 0; i <= 6; i++) {
+			shockWaveVertices[i] = dampingMin + ((dampingMax - dampingMin) / 6 * i);
+			shockWaveVertices[14 - i] = dampingMin + ((dampingMax - dampingMin) / 6 * i);
+		}
+
+		for (int i = terrainHeight - 1; i >= 0; i--) {
+			shockWaveVerticesBuffer[i] = shockWaveVertices[i];
+		}
+	}
+
+	if (offsetMin != 0 || offsetMax != 0) {
+		heightWaveVertices[7] += offsetMax;
+
+		if (heightWaveVertices[7] > 4)
+			heightWaveVertices[7] = 4;
+
+		for (int i = 0; i <= 6; i++) {
+			heightWaveVertices[i] += offsetMin + ((offsetMax - offsetMin) / 6 * i);
+			heightWaveVertices[14 - i] += offsetMin + ((offsetMax - offsetMin) / 6 * i);
+
+			if (heightWaveVertices[i] > 4)
+				heightWaveVertices[i] = 4;
+			if (heightWaveVertices[14-i] > 4)
+				heightWaveVertices[14-i] = 4;
+			std::cout << heightWaveVertices[7] << std::endl;
+		}
+
+		for (int i = terrainHeight - 1; i >= 0; i--) {
+			heightWaveVerticesBuffer[i] = heightWaveVertices[i];
+		}
+	}
+}
+//send a shockwave through the terrain
+void shockwave() {
+	//the shockwave moves in the opposite direction as the terrain, but will deform it as well.
+
+	//the shockwave vertices carry an offset, this offset move down the terrain.
 	int stride = 8; // position (3) + normal (3) + uv (2)
 	int totalVertices = terrainWidth * terrainHeight;
 	int vertexArraySize = totalVertices * stride;
@@ -521,22 +522,38 @@ void movePlane() {
 		for (int x = 0; x < terrainWidth; ++x) {
 
 			index++;
-			if (index + (terrainWidth * stride) < vertexArraySize) {
-				//ONLY the y position, I changed the x and z as well and that just results in every vertex moving to the exact same spot as the target
-				vertices[index] = bufferVertices[index + terrainWidth * stride];
-			}
 
-			else {
-				vertices[index] = bufferVertices[index + terrainWidth * stride - vertexArraySize];
-			}
-			
-			index += 7;
+			//both flatten the environment and give it a small downward offset
+			if (shockWaveVertices[(int)(index / 8 / terrainWidth)] != 0)
+				vertices[index] = (actualVertices[index] / shockWaveVertices[(int)(index / 8 / terrainWidth)]) + heightWaveVertices[(int)(index / 8 / terrainWidth)];
+			else
+				vertices[index] = actualVertices[index] + heightWaveVertices[(int)(index / 8 / terrainWidth)];
+			index += stride - 1;
 		}
 	}
 
 	// Correctly update the vertex buffer
 	glBindBuffer(GL_ARRAY_BUFFER, terrainVBO);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, vertexArraySize * sizeof(float), vertices);  // Correctly calculating size
+
+	for (int i = terrainHeight - 1; i >= 0; i--) {
+		shockWaveVertices[i] = shockWaveVerticesBuffer[i - 1];
+	}
+	shockWaveVertices[0] = 0;
+
+	for (int i = terrainHeight - 1; i >= 0; i--) {
+		shockWaveVerticesBuffer[i] = shockWaveVertices[i];
+	}
+
+	for (int i = terrainHeight - 1; i >= 0; i--) {
+		heightWaveVertices[i] = heightWaveVerticesBuffer[i - 1];
+	}
+	heightWaveVertices[0] = 0;
+
+	for (int i = terrainHeight - 1; i >= 0; i--) {
+		heightWaveVerticesBuffer[i] = heightWaveVertices[i];
+	}
+
 }
 
 void processInput(GLFWwindow* window) {
@@ -548,30 +565,46 @@ void processInput(GLFWwindow* window) {
 
 	bool camChanged = false;
 
+	if (keys[GLFW_KEY_E]) {
+		initiateShockwave(2,8,0,0);
+		keys[GLFW_KEY_E] = false; // make it single press 
+	}
+	if (keys[GLFW_KEY_Q]) {
+		initiateShockwave(0.9f, 0.4f, 0, 0);
+		keys[GLFW_KEY_Q] = false; // make it single press 
+	}
 	if (keys[GLFW_KEY_W]) {
-		cameraPosition += camQuat * glm::vec3(0, 0, 1) * moveSpeed;
-		camChanged = true;
+		initiateShockwave(0, 0, 0, 3);
+		keys[GLFW_KEY_W] = false; // make it single press 
 	}
 	if (keys[GLFW_KEY_S]) {
-		cameraPosition += camQuat * glm::vec3(0, 0, -1) * moveSpeed;
-		camChanged = true;
+		initiateShockwave(0, 0, 0, -3);
+		keys[GLFW_KEY_S] = false; // make it single press 
 	}
-	if (keys[GLFW_KEY_A]) {
-		cameraPosition += camQuat * glm::vec3(1, 0, 0) * moveSpeed;
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_D]) {
-		cameraPosition += camQuat * glm::vec3(-1, 0, 0) * moveSpeed;
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_SPACE]) {
-		cameraPosition += camQuat * glm::vec3(0, 1, 0) * moveSpeed;
-		camChanged = true;
-	}
-	if (keys[GLFW_KEY_LEFT_CONTROL]) {
-		cameraPosition += camQuat * glm::vec3(0, -1, 0) * moveSpeed;
-		camChanged = true;
-	}
+	//if (keys[GLFW_KEY_W]) {
+	//	cameraPosition += camQuat * glm::vec3(0, 0, 1) * moveSpeed;
+	//	camChanged = true;
+	//}
+	//if (keys[GLFW_KEY_S]) {
+	//	cameraPosition += camQuat * glm::vec3(0, 0, -1) * moveSpeed;
+	//	camChanged = true;
+	//}
+	//if (keys[GLFW_KEY_A]) {
+	//	cameraPosition += camQuat * glm::vec3(1, 0, 0) * moveSpeed;
+	//	camChanged = true;
+	//}
+	//if (keys[GLFW_KEY_D]) {
+	//	cameraPosition += camQuat * glm::vec3(-1, 0, 0) * moveSpeed;
+	//	camChanged = true;
+	//}
+	//if (keys[GLFW_KEY_SPACE]) {
+	//	cameraPosition += camQuat * glm::vec3(0, 1, 0) * moveSpeed;
+	//	camChanged = true;
+	//}
+	//if (keys[GLFW_KEY_LEFT_CONTROL]) {
+	//	cameraPosition += camQuat * glm::vec3(0, -1, 0) * moveSpeed;
+	//	camChanged = true;
+	//}
 
 	if (camChanged) {
 		glm::vec3 camForward = camQuat * glm::vec3(0, 0, 1);
@@ -611,38 +644,6 @@ int init(GLFWwindow*& window) {
 		return -1;
 	}
 	return 0;
-}
-
-void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
-	float x = (float)xpos;
-	float y = (float)ypos;
-
-	if (firstMouse) {
-		lastX = x;
-		lastY = y;
-		firstMouse = false;
-	}
-
-	float dx = x - lastX;
-	float dy = y - lastY;
-	lastX = x;
-	lastY = y;
-
-	camYaw -= dx * 0.2f;
-	camPitch = glm::clamp(camPitch + dy * 0.2f, -90.0f, 90.0f);
-
-	if (camYaw > 180.0f) {
-		camYaw -= 360.0f;
-	}
-	if (camYaw < -180.0f) {
-		camYaw += 360.0f;
-	}
-
-	camQuat = glm::quat(glm::vec3(glm::radians(camPitch), glm::radians(camYaw), 0));
-
-	glm::vec3 camForward = camQuat * glm::vec3(0, 0, 1);
-	glm::vec3 camUp = camQuat * glm::vec3(0, 1, 0);
-	view = glm::lookAt(cameraPosition, cameraPosition + camForward, camUp);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -766,27 +767,9 @@ void createTGeometry(GLuint& vao, int& size, int& numIndices) {
 }
 
 void createShaders() {
-	createProgram(simpleProgram, "shaders/simpleVertexShader.shader", "shaders/fragmentShader.shader");
-
-	//set texture channels
-	glUseProgram(simpleProgram);
-	glUniform1i(glGetUniformLocation(simpleProgram, "mainTex"), 0);
-	glUniform1i(glGetUniformLocation(simpleProgram, "normalTex"), 1);
-
 	createProgram(skyProgram, "shaders/skyVertex.shader", "shaders/skyFragment.shader");
+
 	createProgram(terrainProgram, "shaders/terrainVertex.shader", "shaders/terrainFragment.shader");
-
-	glUseProgram(terrainProgram);
-
-	createProgram(modelProgram, "shaders/model.vs", "shaders/model.fs");
-
-	glUseProgram(modelProgram);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_diffuse1"), 0);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_specular1"), 1);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_normal1"), 2);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_roughness1"), 3);
-	glUniform1i(glGetUniformLocation(modelProgram, "texture_ao1"), 4);
-
 }
 
 void createProgram(GLuint& programID, const char* vertex, const char* fragment) {
@@ -902,30 +885,6 @@ GLuint loadTexture(const char* path, int comp)
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 	return textureID;
-}
-
-void renderModel(Model* model, glm::vec3 pos, glm::vec3 rot, glm::vec3 scale) {
-
-	glEnable(GL_DEPTH);
-	glEnable(GL_DEPTH_TEST);
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_BACK);
-
-	glUseProgram(modelProgram);
-
-	glm::mat4 world = glm::mat4(1.0f);
-	world = glm::translate(world, pos);
-	world = world * glm::toMat4(glm::quat(rot));
-	world = glm::scale(world, scale);
-
-	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "world"), 1, GL_FALSE, glm::value_ptr(world));
-	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(glGetUniformLocation(modelProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-
-	glUniform3fv(glGetUniformLocation(modelProgram, "lightDirection"), 1, glm::value_ptr(lightDirection));
-	glUniform3fv(glGetUniformLocation(modelProgram, "cameraPosition"), 1, glm::value_ptr(cameraPosition));
-
-	model->Draw(modelProgram);
 }
 
 //https://glad.dav1d.de/

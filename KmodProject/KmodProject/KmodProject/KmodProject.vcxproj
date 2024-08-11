@@ -163,10 +163,8 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\fragmentShader.shader" />
     <None Include="shaders\model.fs" />
     <None Include="shaders\model.vs" />
-    <None Include="shaders\simpleVertexShader.shader" />
     <None Include="shaders\skyFragment.shader" />
     <None Include="shaders\skyVertex.shader" />
     <None Include="shaders\terrainFragment.shader" />

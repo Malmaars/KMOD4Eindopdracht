@@ -26,12 +26,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\simpleVertexShader.shader">
-      <Filter>Resource Files\shaders</Filter>
-    </None>
-    <None Include="shaders\fragmentShader.shader">
-      <Filter>Resource Files\shaders</Filter>
-    </None>
     <None Include="shaders\skyFragment.shader">
       <Filter>Resource Files\shaders</Filter>
     </None>

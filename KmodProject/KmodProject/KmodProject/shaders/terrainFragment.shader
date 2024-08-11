@@ -37,11 +37,11 @@ void main()
 	float fog = pow(clamp((dist - 250) / 1000, 0, 1), 2);
 
 	vec3 topColor = vec3(125.0 / 255.0, 25.0 / 255.0, 156.0/ 255.0);
-	vec3 botColor = vec3(187.0 / 255.0, 25.0 / 255.0, 29.0/ 255.0);
+	vec3 botColor = vec3(125.0 / 255.0, 25.0 / 255.0, 50.0/ 255.0);
 
 	vec3 fogColor = lerp(botColor, topColor, max(viewDir.y, 0.0));
 	
-	vec4 fragOutput = vec4(lerp(diffuse, fogColor, fog), 1.0);
+	vec4 fragOutput = vec4(diffuse, 1.0);
 
 	FragColor = fragOutput;
 
